@@ -1,5 +1,5 @@
-CFLAGS=-g -Wall
 CC=gcc
+CFLAGS=-g -Wall
 PROG=url_filter
 LIBS=md5/md5c.o HashFilter/hash.o
 LIB_H=md5/md5.h HashFilter/hash.h
