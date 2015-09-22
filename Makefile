@@ -1,8 +1,8 @@
 CC=gcc
 CFLAGS=-g -Wall
 PROG=url_filter
-LIBS=md5/md5c.o HashFilter/hash.o
-LIB_H=md5/md5.h HashFilter/hash.h
+LIBS=md5/md5c.o HashFilter/hash.o CuckooFilter/cuckoo_filter.o
+LIB_H=md5/md5.h HashFilter/hash.h CuckooFilter/cuckoo_filter.h
 OBJS=main.o $(LIBS)
 
 all: $(PROG)

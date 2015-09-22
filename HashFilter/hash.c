@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2015, cumirror <tongjinam@qq.com>
- *
  */
 
 #include <stdio.h>

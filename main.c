@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "md5/md5.h"
 #include "HashFilter/hash.h"
+#include "CuckooFilter/cuckoo_filter.h"
 
 #define MAX_URL_NUM 655350
 #define MAX_URL_LENGTH 64
@@ -19,7 +20,7 @@ struct md5_table {
     MD5 key[0];
 };
 
-static void getKey(char *string, uint8_t *digest)
+static void getHashKey(char *string, uint8_t *digest)
 {
     MD5_CTX context;
     unsigned int len = strlen(string);
@@ -63,6 +64,47 @@ static struct url_table *load_url(char *file)
     return url;
 }
 
+static void hash_test(struct md5_table *md5)
+{
+    int i;
+
+    if (hash_init(md5->num) != 0)
+        return;
+
+    for (i = 0; i < md5->num; i ++)
+        hash_put((uint8_t *)(md5->key + i), i);
+
+    for (i = 0; i < md5->num; i++) {
+        int id = hash_get((uint8_t *)(md5->key + i));
+        if (id != i)
+            printf("Got %16s error id %d i %d\n",
+                    (uint8_t *)(md5->key + i), id, i);
+    }
+
+    hash_dump();
+    return;
+}
+
+static void cuckoo_test(struct md5_table *md5)
+{
+    uint32_t i, index;
+
+    if (cuckoo_filter_init(md5) != 0)
+        return;
+
+    for (i = 0; i < md5->num; i ++)
+        cuckoo_filter_put((uint8_t *)(md5->key + i), &i);
+
+    for (i = 0; i < md5->num; i++) {
+        if (cuckoo_filter_get((uint8_t *)(md5->key + i), &index) < 0)
+            printf("Got %16s error i %d\n",
+                    (uint8_t *)(md5->key + i), i);
+    }
+
+    cuckoo_filter_dump();
+    return;
+}
+
 int main(int argc, char **argv)
 {
     struct url_table *url = NULL;
@@ -81,30 +123,16 @@ int main(int argc, char **argv)
         malloc(sizeof(struct md5_table) + sizeof(MD5) * url->num);
     if (md5 == NULL)
         return 3;
+
     md5->num = url->num;
-
-    if (hash_init(url->num) != 0)
-        return 4;
-
     for (i = 0; i < url->num; i ++) {
         unsigned char digest[16];
-        getKey((char *)(url->urls + i), digest);
+        getHashKey((char *)(url->urls + i), digest);
         memcpy(md5->key + i, digest, sizeof(MD5));
-        hash_put(digest, i);
     }
 
-    for (i = 0; i < md5->num; i++) {
-        int id = 0;
-        id = hash_get((uint8_t *)(md5->key + i));
-        if (id == i)
-            printf("Got %s correct\n", (char *)(url->urls + i));
-        else
-            printf("Got %s error id %d i %d\n",
-                    (char *)(url->urls + i), id, i);
-    }
-
-
-    //hash_dump();
+    hash_test(md5);
+    cuckoo_test(md5);
 
     free(url);
     free(md5);
