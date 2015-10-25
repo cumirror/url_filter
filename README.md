@@ -1,12 +1,13 @@
 # url_filter
-学习CuckooFilter
+采用CuckooFilter、BloomFilter和HashFilter实现对url的过滤，主要用于考察不同hash算法的复杂度和性能，并分析不同场景下算法的优劣。
 
-1.目前添加了一个最简单的HashFilter用于和CuckooFilter对比
+1.目前已集成HashFilter、CuckooFilter和BloomFilter。
 
-2.@我的上铺叫路遥 在实现中用了sha1，这里改为md5的方式，因为md5比sha1计算要快
+2.CuckooFilter算法来自begeekmyfriend/CuckooFilter，BloomFilter算法来自causes/bloom
 
 参考：
 
 https://www.cs.cmu.edu/~dga/papers/cuckoo-conext2014.pdf
 
 http://coolshell.cn/articles/17225.html
+
