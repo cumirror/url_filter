@@ -309,6 +309,10 @@ static void cuckoo_rehash(struct hash_table *table)
 
 void cuckoo_filter_dump()
 {
+    printf("Cuckoo table: buckets num %d, slot num %d\n",
+            hash_table.bucket_num, hash_table.slot_num);
+
+#ifdef DUMP_DETAIL
     int i, j;
     struct hash_table *table = &hash_table;
 
@@ -321,6 +325,7 @@ void cuckoo_filter_dump()
         }
         printf("\n");
     }
+#endif
 }
 
 int cuckoo_filter_get(uint8_t *key, uint32_t *index)

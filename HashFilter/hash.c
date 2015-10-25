@@ -64,11 +64,11 @@ static uint32_t hash(uint8_t *key)
 
 void hash_dump()
 {
-    int i;
-
     printf("Hash table: buckets num %d, items num %d\n",
             hash_table.bucket_num, hash_table.item_num);
 
+#ifdef DUMP_DETAIL
+    int i;
     for (i = 0; i < hash_table.bucket_num; i++) {
         struct hash_bucket *bucket = &hash_table.buckets[i];
         struct hash_item *head = bucket->head;
@@ -83,6 +83,7 @@ void hash_dump()
             head = head->next;
         }
     }
+#endif
 }
 
 int hash_get(uint8_t *key)
