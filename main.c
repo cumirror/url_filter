@@ -5,6 +5,7 @@
 #include "md5/md5.h"
 #include "HashFilter/hash.h"
 #include "CuckooFilter/cuckoo_filter.h"
+#include "BloomFilter/bloom.h"
 
 #define MAX_URL_NUM 655350
 #define MAX_URL_LENGTH 64
@@ -74,7 +75,7 @@ void algorithm_init(struct md5_table *md5)
         exit(1);
     }
 
-    for (i = 0; i < md5->num; i ++)
+    for (i = 0; i < md5->num; i++)
         hash_put((uint8_t *)(md5->key + i), i);
 
     hash_dump();
@@ -84,17 +85,28 @@ void algorithm_init(struct md5_table *md5)
         exit(1);
     }
 
-    for (i = 0; i < md5->num; i ++)
+    for (i = 0; i < md5->num; i++)
         cuckoo_filter_put((uint8_t *)(md5->key + i), &i);
 
     cuckoo_filter_dump();
+
+    if (bloom_filter_init(2500000) != 0) {
+        printf("bloom init failed\n");
+        exit(1);
+    }
+
+    for (i = 0; i < md5->num; i++)
+        bloom_filter_put((uint8_t *)(md5->key + i));
+
+    bloom_filter_dump();
+
 }
 
 void algorithm_test(struct md5_table *md5)
 {
     uint32_t i, j;
-    uint32_t hash_time, cuckoo_time;
-    uint32_t hash_miss = 0, cuckoo_miss = 0;
+    uint32_t hash_time, cuckoo_time, bloom_time;
+    uint32_t hash_miss = 0, cuckoo_miss = 0, bloom_miss = 0;
     struct timeval start, end;
 
 #define LOOP_TIME 200
@@ -127,8 +139,20 @@ void algorithm_test(struct md5_table *md5)
     gettimeofday(&end, NULL);
     cuckoo_time = 1000000*(end.tv_sec-start.tv_sec)+(end.tv_usec-start.tv_usec);
 
-    printf("Time-Miss hash %f/%d cockoo %f/%d\n",
-            hash_time/1000.0, hash_miss, cuckoo_time/1000.0, cuckoo_miss);
+    gettimeofday(&start, NULL);
+    for (i = 0; i < LOOP_TIME; i++) {
+        for (j = 0; j < md5->num; j++) {
+            if (bloom_filter_get((uint8_t *)(md5->key + j)) == 0)
+                bloom_miss++;
+        }
+    }
+    gettimeofday(&end, NULL);
+    bloom_time = 1000000*(end.tv_sec-start.tv_sec)+(end.tv_usec-start.tv_usec);
+
+    printf("Time-Miss hash %f/%d cockoo %f/%d bloom %f/%d\n",
+            hash_time/1000.0, hash_miss,
+            cuckoo_time/1000.0, cuckoo_miss,
+            bloom_time/1000.0, bloom_miss);
 }
 
 int main(int argc, char **argv)

@@ -20,7 +20,7 @@ struct md5_table {
 #define getKey(s, i) ((uint8_t *)&((struct md5_table*)(s))->key[i])
 #define getKeyLen (sizeof(MD5))
 
-struct hash_table {
+struct cuckoo_filter_table {
     struct hash_slot_cache **buckets;
     struct hash_slot_cache *slots;
     uint32_t slot_num;
@@ -28,7 +28,7 @@ struct hash_table {
     void *data;
 };
 
-static struct hash_table hash_table;
+static struct cuckoo_filter_table cuckoo_filter;
 
 static void dump_md5_key(uint8_t *digest)
 {
@@ -45,10 +45,10 @@ static void dump_md5_key(uint8_t *digest)
 
 static inline int key_verify(uint8_t *key, uint32_t index)
 {
-    return memcmp(key, getKey(hash_table.data, index), getKeyLen) == 0;
+    return memcmp(key, getKey(cuckoo_filter.data, index), getKeyLen) == 0;
 }
 
-static int cuckoo_hash_collide(struct hash_table *table, uint32_t *tag, uint32_t index)
+static int cuckoo_hash_collide(struct cuckoo_filter_table *table, uint32_t *tag, uint32_t index)
 {
     int i, j, k, alt_cnt;
     uint32_t old_tag[2], old_index;
@@ -98,7 +98,7 @@ KICK_OUT:
     return 0;
 }
 
-static int cuckoo_hash_get(struct hash_table *table, uint8_t *key, uint32_t *p_index)
+static int cuckoo_hash_get(struct cuckoo_filter_table *table, uint8_t *key, uint32_t *p_index)
 {
     int i, j;
     uint32_t tag[2], index;
@@ -160,7 +160,7 @@ static int cuckoo_hash_get(struct hash_table *table, uint8_t *key, uint32_t *p_i
     return OCCUPIED;
 }
 
-static int cuckoo_hash_put(struct hash_table *table, uint8_t *key, uint32_t index)
+static int cuckoo_hash_put(struct cuckoo_filter_table *table, uint8_t *key, uint32_t index)
 {
     int i, j;
     uint32_t tag[2];
@@ -208,7 +208,7 @@ static int cuckoo_hash_put(struct hash_table *table, uint8_t *key, uint32_t inde
     return 0;
 }
 
-static void cuckoo_hash_status_set(struct hash_table *table, uint8_t *key, int status)
+static void cuckoo_hash_status_set(struct cuckoo_filter_table *table, uint8_t *key, int status)
 {
     uint32_t i, j, tag[2];
     struct hash_slot_cache *slot;
@@ -247,20 +247,20 @@ static void cuckoo_hash_status_set(struct hash_table *table, uint8_t *key, int s
     }
 }
 
-static void cuckoo_hash_delete(struct hash_table *table, uint8_t *key)
+static void cuckoo_hash_delete(struct cuckoo_filter_table *table, uint8_t *key)
 {
     cuckoo_hash_status_set(table, key, DELETED);
 }
 
-static void cuckoo_hash_recover(struct hash_table *table, uint8_t *key)
+static void cuckoo_hash_recover(struct cuckoo_filter_table *table, uint8_t *key)
 {
     cuckoo_hash_status_set(table, key, OCCUPIED);
 }
 
-static void cuckoo_rehash(struct hash_table *table)
+static void cuckoo_rehash(struct cuckoo_filter_table *table)
 {
     int i, j;
-    struct hash_table old_table;
+    struct cuckoo_filter_table old_table;
 
     /* Reallocate hash slots */
     old_table.slots = table->slots;
@@ -310,11 +310,11 @@ static void cuckoo_rehash(struct hash_table *table)
 void cuckoo_filter_dump()
 {
     printf("Cuckoo table: buckets num %d, slot num %d\n",
-            hash_table.bucket_num, hash_table.slot_num);
+            cuckoo_filter.bucket_num, cuckoo_filter.slot_num);
 
 #ifdef DUMP_DETAIL
     int i, j;
-    struct hash_table *table = &hash_table;
+    struct cuckoo_filter_table *table = &cuckoo_filter;
 
     printf("List all keys in hash table (tag/status/index):\n");
     for (i = 0; i < table->bucket_num; i++) {
@@ -330,28 +330,28 @@ void cuckoo_filter_dump()
 
 int cuckoo_filter_get(uint8_t *key, uint32_t *index)
 {
-    return cuckoo_hash_get(&hash_table, key, index) != OCCUPIED ? -1 : 0;
+    return cuckoo_hash_get(&cuckoo_filter, key, index) != OCCUPIED ? -1 : 0;
 }
 
 void cuckoo_filter_put(uint8_t *key, uint32_t *index)
 {
     if (index != NULL) {
         /* Important: Reject duplicated keys keeping from eternal collision */
-        int status = cuckoo_hash_get(&hash_table, key, NULL);
+        int status = cuckoo_hash_get(&cuckoo_filter, key, NULL);
         if (status == OCCUPIED) {
             return;
         } else if (status == DELETED) {
-            cuckoo_hash_recover(&hash_table, key);
+            cuckoo_hash_recover(&cuckoo_filter, key);
         } else {
             /* Insert into hash slots */
-            if (cuckoo_hash_put(&hash_table, key, *index) == -1) {
-                cuckoo_rehash(&hash_table);
-                cuckoo_hash_put(&hash_table, key, *index);
+            if (cuckoo_hash_put(&cuckoo_filter, key, *index) == -1) {
+                cuckoo_rehash(&cuckoo_filter);
+                cuckoo_hash_put(&cuckoo_filter, key, *index);
             }
         }
     } else {
         /* Delete at the hash slot */
-        cuckoo_hash_delete(&hash_table, key);
+        cuckoo_hash_delete(&cuckoo_filter, key);
     }
 }
 
@@ -362,24 +362,24 @@ int cuckoo_filter_init(void *s)
     hash_size = next_pow_of_2(getSize(s));
 
     /* Allocate hash slots */
-    hash_table.slot_num = hash_size;
-    hash_table.slots = calloc(hash_table.slot_num, sizeof(struct hash_slot_cache));
-    if (hash_table.slots == NULL) {
+    cuckoo_filter.slot_num = hash_size;
+    cuckoo_filter.slots = calloc(cuckoo_filter.slot_num, sizeof(struct hash_slot_cache));
+    if (cuckoo_filter.slots == NULL) {
         return -1;
     }
 
     /* Allocate hash buckets associated with slots */
-    hash_table.bucket_num = hash_table.slot_num / ASSOC_WAY;
-    hash_table.buckets = malloc(hash_table.bucket_num * sizeof(struct hash_slot_cache *));
-    if (hash_table.buckets == NULL) {
-        free(hash_table.slots);
+    cuckoo_filter.bucket_num = cuckoo_filter.slot_num / ASSOC_WAY;
+    cuckoo_filter.buckets = malloc(cuckoo_filter.bucket_num * sizeof(struct hash_slot_cache *));
+    if (cuckoo_filter.buckets == NULL) {
+        free(cuckoo_filter.slots);
         return -1;
     }
-    for (i = 0; i < hash_table.bucket_num; i++) {
-        hash_table.buckets[i] = &hash_table.slots[i * ASSOC_WAY];
+    for (i = 0; i < cuckoo_filter.bucket_num; i++) {
+        cuckoo_filter.buckets[i] = &cuckoo_filter.slots[i * ASSOC_WAY];
     }
 
-    hash_table.data = s;
+    cuckoo_filter.data = s;
 
     return 0;
 }
